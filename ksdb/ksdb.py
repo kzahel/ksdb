@@ -217,15 +217,15 @@ class KSDB(object):
         self.db = db
         self.aws_key = aws_key
         self.aws_secret = aws_secret
-        self.streams = []
+        self.streams = {}
 
     @gen.engine
     def get_stream(self, callback):
         found = False
-        for stream in self.streams:
-            if not stream._connecting and not stream._current_request:
+        for stream,v in self.streams.iteritems():
+            if not stream._connecting and not stream._current_request and not stream.closed():
                 found = True
-                logging.info('found usable db connection')
+                logging.info('found usable db connection (%s total)' % len(self.streams))
                 callback(stream)
         if not found:
             logging.info('creating new db connection')
@@ -234,7 +234,7 @@ class KSDB(object):
             stream._current_request = None
             stream.set_close_callback(functools.partial(self.on_close, stream))
             yield gen.Task( stream.connect, (self.db, 80) )
-            self.streams.append( stream )
+            self.streams[ stream ] = None
             callback(stream)
 
     def create_request(self, parameters):
@@ -327,10 +327,14 @@ class KSDB(object):
         #    logging.info('put creates data %s %s' % (k,data[k]))
         self.do_request(data, callback)
 
-    def on_close(self, stream):
-        logging.warn('socket close')
+    def remove_connection(self, stream):
+        if not stream.closed(): stream.close()
         if stream in self.streams:
-            self.streams.remove(stream)
+            del self.streams[stream]
+
+    def on_close(self, stream):
+        logging.warn('db connection close')
+        self.remove_connection(stream)
 
     @gen.engine
     def do_request(self, arguments, callback=None):
@@ -370,6 +374,10 @@ class KSDB(object):
         #stream.close()
         resp = Response(code, headers, ''.join(chunks))
         callback( resp )
+
+        if len(self.streams) > 25:
+            logging.warn('too many db connections %s -- closing one' % len(self.streams))
+            self.remove_connection(stream)
 
         #logging.info('chunks %s' % chunks)
         #resp.parsexml()
