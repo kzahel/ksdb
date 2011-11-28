@@ -1,0 +1,4 @@
+a client library for amazon simpledb
+handles the basic things like working with domains and queries
+parses xml responses into python dicts.
+simple and efficient! :-)
