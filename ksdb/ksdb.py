@@ -334,7 +334,8 @@ class KSDB(object):
 
     @gen.engine
     def do_request(self, arguments, callback=None):
-        logging.info('do request w args %s' % arguments)
+        if 'Action' in arguments:
+            logging.info('do request %s' % arguments['Action'])
         stream = yield gen.Task( self.get_stream )
         request = self.create_request(arguments)
         stream._current_request = request
