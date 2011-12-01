@@ -435,8 +435,8 @@ class Domain(object):
     def batch_put(self, items, callback):
         self.db.batch_put(self.domain, items, callback)
 
-    def delete(self, key, attributes, callback):
-        self.db.delete(self.domain, key, attributes, callback)
+    def delete(self, key, attributes=None, callback=None):
+        self.db.delete(self.domain, key, attributes=attributes, callback=callback)
 
     def get_metadata(self, callback):
         data = {
@@ -444,3 +444,6 @@ class Domain(object):
             'DomainName': self.domain,
         }
         self.db.do_request(data, callback)
+
+    def get_by_attribute(self, attrname, attrval, callback):
+        self.db.query('select * from %s where %s="%s"' % (self.domain, attrname, attrval), callback)

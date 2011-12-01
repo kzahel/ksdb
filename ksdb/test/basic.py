@@ -4,6 +4,7 @@ import time
 import tornado.ioloop
 from tornado import gen
 from tornado.options import define
+import uuid
 
 import logging
 define('debug',default=True)
@@ -30,6 +31,9 @@ from ksdb.ksdb import KSDB
 db = KSDB(config['sdb_access_key'], config['sdb_access_secret'], secure=False)
 users = db.get_domain('users_dev')
 
+@gen.engine
+def create_domains(domains):
+    yield gen.Multi( [ gen.Task( db.create_domain, domain ) for domain in domains ] )
 
 @gen.engine
 def test_create_domain():
@@ -101,6 +105,46 @@ def do_stuff():
     ioloop.stop()
 
 #do_stuff()
-test_query()
+#test_query()
+#create_domains(['content','content_dev'])
+
+@gen.engine
+def setup_channel():
+    for domainname in ['content','content_dev']:
+        yield gen.Task( db.delete_domain, domainname )
+
+    yield gen.Task( asyncsleep, 5 ) 
+    for domainname in ['content','content_dev']:
+        yield gen.Task( db.create_domain, domainname )
+    yield gen.Task( asyncsleep, 5 ) 
+
+    channel_name = "Toolbar Featured"
+    channel_key = str(uuid.uuid4())
+    channel = { channel_key: { 'type': 'channel',
+                                'name': channel_name,
+                                'description': 'torrents featured in the toolbar'
+                                } }
+
+    
+    for domainname in ['content','content_dev']:
+        domain = db.get_domain(domainname)
+        yield gen.Task( domain.batch_put, channel )
+
+
+
+        inserted = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+
+        key = str(uuid.uuid4())
+
+        yield gen.Task( domain.batch_put, { key: { 'channel': channel_key,
+                      'type': 'item',
+                      'name': "God's Robots",
+                      'torrent': 'http://apps.bittorrent.com/godsrobots/godsrobots.torrent',
+                      'created': inserted
+                      }} )
+                    
+
+setup_channel()
+
 #test_create_domain()
 ioloop.start()
