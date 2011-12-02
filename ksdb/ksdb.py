@@ -227,6 +227,7 @@ class KSDB(object):
                 found = True
                 logging.info('found usable db connection (%s total)' % len(self.streams))
                 callback(stream)
+                break
         if not found:
             logging.info('creating new db connection')
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
