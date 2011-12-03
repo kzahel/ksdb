@@ -17,6 +17,7 @@ from tornado.escape import utf8
 from tornado.util import b
 from tornado.httputil import HTTPHeaders
 from tornado.escape import native_str
+from tornado.options import options
 
 def escape(s):
     return urllib.quote(s, safe='-_~')
@@ -93,10 +94,15 @@ class ResponseParser(object):
                 self._cur_name = data
             else:
                 if self._cur_name in self.attributes:
-                    if hasattr( self.attributes[self._cur_name], '__iter__' ):
-                        self.attributes[self._cur_name].append( data )
+                    if len(self.stack) > 1 and self.stack[1] == 'GetAttributesResult':
+                        # &amp; causes data to be called multiple
+                        # times even for inside a single thing
+                        self.attributes[self._cur_name] += data
                     else:
-                        self.attributes[self._cur_name] = [ self.attributes[self._cur_name], data ]
+                        if hasattr( self.attributes[self._cur_name], '__iter__' ):
+                            self.attributes[self._cur_name].append( data )
+                        else:
+                            self.attributes[self._cur_name] = [ self.attributes[self._cur_name], data ]
                 else:
                     self.attributes[self._cur_name] = data
         elif len(self.stack) > 2 and self.stack[-2] == 'DomainMetadataResult':
@@ -192,7 +198,8 @@ class Response(object):
         self.code = code
         self.headers = headers
         self.error = self.code != 200
-        #self.body = body
+        if 'debug' in options and options.debug:
+            self.body = body
         self.attributes = None
         self.parsexml(body)
 
