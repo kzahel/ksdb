@@ -220,11 +220,12 @@ class KSDB(object):
 
     service_version = '2009-04-15'
 
-    def __init__(self, aws_key, aws_secret, db='sdb.amazonaws.com', secure=True):
+    def __init__(self, aws_key, aws_secret, db='sdb.amazonaws.com', secure=True, name=None):
         self.db = db
         self.aws_key = aws_key
         self.aws_secret = aws_secret
         self.streams = {}
+        self.name = name
 
     @gen.engine
     def get_stream(self, callback):
@@ -232,16 +233,17 @@ class KSDB(object):
         for stream,v in self.streams.iteritems():
             if not stream._connecting and not stream._current_request and not stream.closed():
                 found = True
-                logging.info('found usable db connection (%s total)' % len(self.streams))
+                logging.info('%sfound usable db connection (%s total)' % (self.name+' ' if self.name else '', len(self.streams)))
                 callback(stream)
                 break
         if not found:
-            logging.info('creating new db connection')
+            logging.info('%screating new db connection' % (self.name+' ' if self.name else ''))
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             stream = tornado.iostream.IOStream(s)
             stream._current_request = None
             stream.set_close_callback(functools.partial(self.on_close, stream))
             yield gen.Task( stream.connect, (self.db, 80) )
+            stream._debug_info = 'ksdb stream'
             self.streams[ stream ] = None
             callback(stream)
 
@@ -342,6 +344,10 @@ class KSDB(object):
 
     def on_close(self, stream):
         logging.warn('db connection close')
+        if stream._current_request:
+            # likely "read error" on socket iostream.py
+            if stream._current_request:
+                logging.error('db connection closed while had _current_request')
         self.remove_connection(stream)
 
     @gen.engine
